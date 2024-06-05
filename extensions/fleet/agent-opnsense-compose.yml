@@ -1,0 +1,50 @@
+# Fleet-enrolled Elastic Agent pre-configured with an agent policy
+# For running the OPNserver Server integration (see kibana.yml).
+#
+# Run with
+#   docker-compose \
+#     -f docker-compose.yml \
+#     -f extensions/fleet/fleet-compose.yml \
+#     -f extensions/fleet/agent-opnsense-compose.yml \
+#     up -d
+
+services:
+  opnsense-server:
+    build:
+      context: extensions/fleet/
+      args:
+        ELASTIC_VERSION: ${ELASTIC_VERSION}
+    volumes:
+      - opnsense-server:/usr/share/elastic-agent/state:Z
+      - ./tls/certs/ca/ca.crt:/usr/share/elastic-agent/ca.crt:ro,z                                        # (!) TLS certificates. Generate using the 'tls' service.
+      - ./tls/certs/OPNsense-server/OPNsense-server.crt:/usr/share/elastic-agent/OPNsense-server.crt:ro,Z # (!) TLS certificates. Generate using the 'tls' service.
+      - ./tls/certs/OPNsense-server/OPNsense-server.key:/usr/share/elastic-agent/OPNsense-server.key:ro,Z # (!) TLS certificates. Generate using the 'tls' service.
+    environment:
+      FLEET_ENROLL: '1'
+      FLEET_TOKEN_POLICY_NAME: OPNsense
+      FLEET_URL: https://fleet-server:8220
+      ELASTICSEARCH_HOST: https://elasticsearch:9200
+      ELASTICSEARCH_CA: /usr/share/elastic-agent/ca.crt
+      # Enrollment.
+      # (a) Auto-enroll using basic authentication
+      ELASTICSEARCH_USERNAME: elastic
+      ELASTICSEARCH_PASSWORD: ${ELASTIC_PASSWORD:-}
+      # (b) Enroll using a pre-generated enrollment token
+      # FLEET_ENROLLMENT_TOKEN: MHJLczRJOEJIMHpIZ0tJcWRxVmg6eURsczlPZHJSTnFKTjdsTWlqUmNLZw==
+    ports:
+        # OPNsense syslogs
+      - 9001:9001/udp
+        # OPNsense netflow
+      - 9002:9002/udp
+    hostname: opnsense-server
+    # Elastic Agent does not retry failed connections to Kibana upon the initial enrollment phase.
+    restart: on-failure
+    networks:
+      - elk
+    depends_on:
+      - elasticsearch
+      - kibana
+      - fleet-server
+
+volumes:
+  opnsense-server:
